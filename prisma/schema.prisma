@@ -1,0 +1,114 @@
+// Prisma schema for Cargo Tracking System
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleName {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+enum CargoStatus {
+  PENDING
+  PICKED_UP
+  IN_TRANSIT
+  ARRIVED_AT_HUB
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  password     String
+  contact      String?  // required for STAFF and CUSTOMER (validated at controller level)
+  role         RoleName @default(CUSTOMER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userPermissions     UserPermission[]
+  createdCargo        Cargo[]            @relation("CreatedByUser")
+  statusUpdates       CargoStatusUpdate[] @relation("UpdatedByUser")
+  customerCargo       Cargo[]            @relation("CustomerCargo")
+
+  @@map("users")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userPermissions UserPermission[]
+
+  @@map("permissions")
+}
+
+model UserPermission {
+  id           String   @id @default(uuid())
+  userId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+}
+
+model Cargo {
+  id              String      @id @default(uuid())
+  trackingNumber  String      @unique
+  title           String
+  description     String?
+  weight          Float?      // optional weight in kilograms
+  price           Float?      // optional declared price
+  senderName      String
+  senderEmail     String?     // optional - prefilled from customer when assigned
+  senderContact   String?     // optional - prefilled from customer when assigned
+  receiverName    String
+  receiverEmail   String?     // optional - some receivers don't use email
+  receiverContact String?     // optional - phone/alternative contact
+  origin          String
+  destination     String
+  currentStatus   CargoStatus @default(PENDING)
+  entryDate       DateTime    @default(now())  // admin-supplied "received into system" date
+  customerId      String?
+  createdById     String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  createdBy      User               @relation("CreatedByUser", fields: [createdById], references: [id])
+  customer       User?              @relation("CustomerCargo", fields: [customerId], references: [id])
+  statusUpdates  CargoStatusUpdate[]
+
+  @@map("cargo")
+}
+
+model CargoStatusUpdate {
+  id           String   @id @default(uuid())
+  cargoId      String
+  status       CargoStatus
+  note         String?
+  latitude     Float?
+  longitude    Float?
+  locationText String?
+  updatedById  String
+  createdAt    DateTime @default(now())
+
+  cargo      Cargo @relation(fields: [cargoId], references: [id], onDelete: Cascade)
+  updatedBy  User  @relation("UpdatedByUser", fields: [updatedById], references: [id])
+
+  @@map("cargo_status_updates")
+}
